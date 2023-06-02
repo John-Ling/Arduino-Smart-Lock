@@ -6,10 +6,13 @@
 
 const uint8_t TOGGLE_BUTTON_PIN = 4;
 const uint8_t INDICATOR_LED = 5;
-const uint8_t SERVO_PIN = 3;
+const uint8_t MOTOR_PIN = 3;
 const uint8_t EEPROM_ADDRESS = 0;
+const uint8_t RX = 6; // Connect to TX pin on receiver
+const uint8_t TX = 7; // Connect to RX pin on receiver
 const unsigned long DEBOUNCE_DELAY = 20;
 
+Servo lockMotor;
 byte opened = 1; // Global state of the lock
 
 void setup()
@@ -17,13 +20,16 @@ void setup()
     pinMode(TOGGLE_BUTTON_PIN, INPUT);
     pinMode(INDICATOR_LED, OUTPUT);
 
+    lockMotor.attach(MOTOR_PIN);
+
+    // Initally set state if EEPROM has never been written to
     if (EEPROM.read(EEPROM_ADDRESS) == 255)
-    { // Initally set state if EEPROM has never been written to
+    { 
         EEPROM.write(EEPROM_ADDRESS, opened);
     }
 
-    opened = EEPROM.read(EEPROM_ADDRESS); // Load opened state from memory
-    Serial.begin(9600);
+    opened = EEPROM.read(EEPROM_ADDRESS); // Load state from memory
+    move_motor();
 }
 
 void loop()
@@ -36,13 +42,13 @@ void loop()
     {
         digitalWrite(INDICATOR_LED, LOW);
     }
+    move_motor();
 
-    #pragma region Toggle Button Code
-    byte state = opened;
+    // React to toggle button being pressed
+    static byte state = opened;
     static byte readState = 0;
     static byte previousState = 0;
     static long previousDebounceTime = 0;
-    // React to toggle button being pressed
 
     // Debouncing code
     readState = digitalRead(TOGGLE_BUTTON_PIN);
@@ -71,12 +77,30 @@ void loop()
     }
 
     previousState = readState;
-    #pragma endregion
 }
 
-// Moves servo, updates variable opened and saves state to EEPROM
+void move_motor(void)
+{
+    uint8_t targetAngle = 90 * opened;
+    lockMotor.write(targetAngle);
+    return;
+}
+
+void set_state(byte value)
+{
+    if (value > 1 || value < 0) 
+    {
+        return;
+    }
+
+    opened = value;
+    EEPROM.write(EEPROM_ADDRESS, opened);
+    return;
+}
+
+// Toggles state and saves to EEPROM
 void toggle_state(void)
 {
-    opened = (opened + 1) % 2;
-    EEPROM.write(EEPROM_ADDRESS, opened);
+    set_state((opened + 1) % 2);
+    return;
 }
