@@ -1,23 +1,30 @@
 #include <Arduino.h>
+#include <SPI.h>
+#include <MFRC522.h>
 #include <Servo.h>
 #include <EEPROM.h>
 
 #include "main.h"
 
-const uint8_t TOGGLE_BUTTON_PIN = 4;
-const uint8_t INDICATOR_LED = 5;
+const uint8_t TOGGLE_BUTTON = 4;
+const uint8_t RESET_BUTTON = 2;
+const uint8_t INDICATOR_LED = 5; // LED is on when locked
 const uint8_t MOTOR_PIN = 3;
 const uint8_t EEPROM_ADDRESS = 0;
-const uint8_t RX = 6; // Connect to TX pin on receiver
-const uint8_t TX = 7; // Connect to RX pin on receiver
+const uint8_t READER_RESET = 9; // Reset pin for card reader
+const uint8_t READER_SS = 10;
 const unsigned long DEBOUNCE_DELAY = 20;
 
 Servo lockMotor;
-byte opened = 1; // Global state of the lock
+MFRC522 reader(READER_SS, READER_RESET);
+uint8_t opened = 1; // Global state of the lock
 
 void setup()
 {
-    pinMode(TOGGLE_BUTTON_PIN, INPUT);
+    SPI.begin();
+    reader.PCD_Init();
+    pinMode(TOGGLE_BUTTON, INPUT);
+    pinMode(RESET_BUTTON, INPUT);
     pinMode(INDICATOR_LED, OUTPUT);
 
     lockMotor.attach(MOTOR_PIN);
@@ -34,24 +41,29 @@ void setup()
 
 void loop()
 {
-    if (opened == 1)
+    if (check_rfid() == 0)
     {
-        digitalWrite(INDICATOR_LED, HIGH);
+        uint32_t key;
+        for (uint8_t i = 0; i < 4; i++) // Read key
+        {
+            key <<= 8;
+            key |= reader.uid.uidByte[i];
+        }
+        reader.PICC_HaltA();
+        if ((key ^ 0x533780FC) == 0x000000) 
+        {
+            toggle_state();
+        }
     }
-    else
-    {
-        digitalWrite(INDICATOR_LED, LOW);
-    }
-    move_motor();
 
     // React to toggle button being pressed
-    static byte state = opened;
-    static byte readState = 0;
-    static byte previousState = 0;
+    static uint8_t state = opened;
+    static uint8_t readState = 0;
+    static uint8_t previousState = 0;
     static long previousDebounceTime = 0;
 
     // Debouncing code
-    readState = digitalRead(TOGGLE_BUTTON_PIN);
+    readState = digitalRead(TOGGLE_BUTTON);
     if (readState != previousState)
     {
         previousDebounceTime = millis();
@@ -79,6 +91,21 @@ void loop()
     previousState = readState;
 }
 
+// Check if rfid card is nearby
+uint8_t check_rfid(void)
+{
+    if (!reader.PICC_IsNewCardPresent())
+    {
+        return 1;
+    }
+
+    if (!reader.PICC_ReadCardSerial())
+    {
+        return 1;
+    }
+    return 0;
+}
+
 void move_motor(void)
 {
     uint8_t targetAngle = 90 * opened;
@@ -86,7 +113,7 @@ void move_motor(void)
     return;
 }
 
-void set_state(byte value)
+void set_state(uint8_t value)
 {
     if (value > 1 || value < 0) 
     {
@@ -98,9 +125,18 @@ void set_state(byte value)
     return;
 }
 
-// Toggles state and saves to EEPROM
 void toggle_state(void)
 {
     set_state((opened + 1) % 2);
+    move_motor();
+    if (opened == 1)
+    {
+        digitalWrite(INDICATOR_LED, LOW);
+    }
+    else
+    {
+        digitalWrite(INDICATOR_LED, HIGH);
+    }
+
     return;
 }
