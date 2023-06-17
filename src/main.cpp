@@ -6,13 +6,12 @@
 
 #include "main.h"
 
-const uint8_t TOGGLE_BUTTON = 4;
-const uint8_t RESET_BUTTON = 2;
-const uint8_t INDICATOR_LED = 5; // LED is on when locked
-const uint8_t MOTOR_PIN = 3;
+const uint8_t TOGGLE_BUTTON = 5;
+const uint8_t INDICATOR_LED = 9; // LED is on when locked
+const uint8_t MOTOR_PIN = 6;
 const uint8_t EEPROM_ADDRESS = 0;
-const uint8_t READER_RESET = 9; // Reset pin for card reader
-const uint8_t READER_SS = 10;
+const uint8_t READER_RESET = 8; // Reset pin for card reader
+const uint8_t READER_SS = 7;
 const unsigned long DEBOUNCE_DELAY = 20;
 
 Servo lockMotor;
@@ -24,9 +23,7 @@ void setup()
     SPI.begin();
     reader.PCD_Init();
     pinMode(TOGGLE_BUTTON, INPUT);
-    pinMode(RESET_BUTTON, INPUT);
     pinMode(INDICATOR_LED, OUTPUT);
-
     lockMotor.attach(MOTOR_PIN);
 
     // Initally set state if EEPROM has never been written to
@@ -41,16 +38,24 @@ void setup()
 
 void loop()
 {
+    if (opened == 1)
+    {
+        digitalWrite(INDICATOR_LED, LOW);
+    }
+    else
+    {
+        digitalWrite(INDICATOR_LED, HIGH);
+    }
     if (check_rfid() == 0)
     {
         uint32_t key;
-        for (uint8_t i = 0; i < 4; i++) // Read key
+        for (uint8_t i = 0; i < 4; i++)
         {
             key <<= 8;
             key |= reader.uid.uidByte[i];
         }
         reader.PICC_HaltA();
-        if ((key ^ 0x533780FC) == 0x000000) 
+        if ((key ^ 0x533780FC) == 0x0)
         {
             toggle_state();
         }
@@ -64,7 +69,7 @@ void loop()
 
     // Debouncing code
     readState = digitalRead(TOGGLE_BUTTON);
-    if (readState != previousState)
+    if (readState != previousState)  
     {
         previousDebounceTime = millis();
     }
@@ -106,6 +111,18 @@ uint8_t check_rfid(void)
     return 0;
 }
 
+void set_indicator_led(void)
+{
+    if (opened == 1)
+    {
+        digitalWrite(INDICATOR_LED, LOW);
+    }
+    else
+    {
+        digitalWrite(INDICATOR_LED, HIGH);
+    }
+}
+
 void move_motor(void)
 {
     uint8_t targetAngle = 90 * opened;
@@ -129,14 +146,5 @@ void toggle_state(void)
 {
     set_state((opened + 1) % 2);
     move_motor();
-    if (opened == 1)
-    {
-        digitalWrite(INDICATOR_LED, LOW);
-    }
-    else
-    {
-        digitalWrite(INDICATOR_LED, HIGH);
-    }
-
     return;
 }
