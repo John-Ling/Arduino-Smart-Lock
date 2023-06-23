@@ -6,12 +6,12 @@
 
 #include "main.h"
 
-const uint8_t TOGGLE_BUTTON = 5;
-const uint8_t INDICATOR_LED = 9; // LED is on when locked
-const uint8_t MOTOR_PIN = 6;
+const uint8_t TOGGLE_BUTTON = 6;
+const uint8_t INDICATOR_LED = 8; // LED is on when locked
+const uint8_t MOTOR_PIN = 7;
 const uint8_t EEPROM_ADDRESS = 0;
-const uint8_t READER_RESET = 8; // Reset pin for card reader
-const uint8_t READER_SS = 7;
+const uint8_t READER_RESET = 9; // Reset pin for card reader
+const uint8_t READER_SS = 10;
 const unsigned long DEBOUNCE_DELAY = 20;
 
 Servo lockMotor;
@@ -33,19 +33,11 @@ void setup()
     }
 
     opened = EEPROM.read(EEPROM_ADDRESS); // Load state from memory
-    move_motor();
+    set_state(opened);
 }
 
 void loop()
 {
-    if (opened == 1)
-    {
-        digitalWrite(INDICATOR_LED, LOW);
-    }
-    else
-    {
-        digitalWrite(INDICATOR_LED, HIGH);
-    }
     if (check_rfid() == 0)
     {
         uint32_t key;
@@ -139,12 +131,13 @@ void set_state(uint8_t value)
 
     opened = value;
     EEPROM.write(EEPROM_ADDRESS, opened);
+    set_indicator_led();
+    move_motor();
     return;
 }
 
 void toggle_state(void)
 {
     set_state((opened + 1) % 2);
-    move_motor();
     return;
 }
