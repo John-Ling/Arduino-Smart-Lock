@@ -6,25 +6,30 @@
 
 #include "main.h"
 
-const uint8_t TOGGLE_BUTTON = 6;
-const uint8_t INDICATOR_LED = 8; // LED is on when locked
-const uint8_t MOTOR_PIN = 7;
-const uint8_t EEPROM_ADDRESS = 0;
-const uint8_t READER_RESET = 9; // Reset pin for card reader
-const uint8_t READER_SS = 10;
-const unsigned long DEBOUNCE_DELAY = 20;
+#define TOGGLE_BUTTON  8
+#define MOTOR_PIN 7
+#define DEBUG_LED 6
+#define EEPROM_ADDRESS 0
+#define READER_RESET 9 // Reset pin for card reader
+#define READER_SS 10
+#define DEBOUNCE_DELAY 20
 
 Servo lockMotor;
 MFRC522 reader(READER_SS, READER_RESET);
 uint8_t opened = 1; // Global state of the lock
 
-void setup()
+void setup() 
 {
+    ADCSRA = 0;
     SPI.begin();
     reader.PCD_Init();
+    delay(4);
+    reader.PCD_SetAntennaGain(reader.RxGain_max);
     pinMode(TOGGLE_BUTTON, INPUT);
-    pinMode(INDICATOR_LED, OUTPUT);
+    pinMode(DEBUG_LED, OUTPUT);
     lockMotor.attach(MOTOR_PIN);
+
+    ADCSRA = 0; // Disable ADC
 
     // Initally set state if EEPROM has never been written to
     if (EEPROM.read(EEPROM_ADDRESS) == 255)
@@ -103,18 +108,6 @@ uint8_t check_rfid(void)
     return 0;
 }
 
-void set_indicator_led(void)
-{
-    if (opened == 1)
-    {
-        digitalWrite(INDICATOR_LED, LOW);
-    }
-    else
-    {
-        digitalWrite(INDICATOR_LED, HIGH);
-    }
-}
-
 void move_motor(void)
 {
     uint8_t targetAngle = 90 * opened;
@@ -131,8 +124,8 @@ void set_state(uint8_t value)
 
     opened = value;
     EEPROM.write(EEPROM_ADDRESS, opened);
-    set_indicator_led();
     move_motor();
+    digitalWrite(DEBUG_LED, !opened);
     return;
 }
 
